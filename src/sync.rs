@@ -9,7 +9,6 @@ use std::error::Error;
 use std::str::FromStr;
 use std::time::Instant;
 
-use serde_json::json;
 use solana_client::client_error::Result as Result2;
 use solana_client::rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient};
 use solana_client::rpc_config::RpcTransactionConfig;
@@ -18,8 +17,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction, UiMessage, UiTransactionEncoding};
 
+use crate::action::ActionData;
 use crate::common::ProgramID::{RaydiumAuthorityV4, RaydiumLiquidityPoolV4};
-use crate::utils::write_json_to_file;
 
 const RPC_URL: &str = "http://gastroscopic-agars-gGx9fjhXm7.helius-rpc.com";
 // const RPC_URL: &str = "https://devnet.helius-rpc.com/?api-key=2c7e26a1-607c-46e4-9907-9e6ea71dff6a";
@@ -77,41 +76,11 @@ fn get_trancation(client: &RpcClient, sign: &str) -> Result2<EncodedConfirmedTra
     return transaction;
 }
 
-struct Data {
-    block_time: i64,
-    slot: u64,
-    signer: String,
-    pair: String,
-    token0: String,
-    token1: String,
-    amount0: f64,
-    amount1: f64,
-    fee: u64,
-    signature: String,
-}
-
-impl Data {
-    fn default() -> Data {
-        let data = Data {
-            signature: "".to_string(),
-            block_time: 0,
-            slot: 0,
-            signer: "".to_string(),
-            pair: "".to_string(),
-            token0: "".to_string(),
-            token1: "".to_string(),
-            amount0: 0.0,
-            amount1: 0.0,
-            fee: 0,
-        };
-        data
-    }
-}
 
 /// 解析交易
 fn parse_tx(encode_tx: EncodedConfirmedTransactionWithStatusMeta) -> Option<()> {
     println!("{:?}", encode_tx);
-    let mut data = Data::default();
+    let mut data = ActionData::default();
     // 区块时间
     let block_time = encode_tx.block_time?;
     data.block_time = block_time as i64;
@@ -151,11 +120,7 @@ fn debug() {
     match tx_result {
         Ok(v) => {
 
-            // 打印 JSON 格式的交易信息
-            let json_output = json!(&v);
-            let s = serde_json::to_string_pretty(&json_output).unwrap();
-            println!("Transaction in JSON format:\n{}", s);
-            write_json_to_file(s.as_str(), "aaa.json").unwrap();
+
 // 创建文件名，基于签名的前6位字符
 //             let filename = format!("{}.json", &signature[0..6]);
 //             let mut file = File::create(filename).unwrap();
