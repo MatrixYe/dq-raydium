@@ -1,11 +1,4 @@
-/// @Name ActionType
-///
-/// @Date 2024/5/12 上午2:44
-///
-/// @Author Matrix.Ye
-///
-/// @Description:
-use mongodb::bson::doc;
+use mongodb::bson::{DateTime, doc};
 use serde::{Deserialize, Serialize};
 
 pub enum ActionType {
@@ -23,6 +16,8 @@ pub enum ActionType {
     Unstake,
     //
     WithdrawStake,
+    //
+    Unknown,
 }
 
 impl ActionType {
@@ -35,7 +30,7 @@ impl ActionType {
             ActionType::Stake => "stake",
             ActionType::Unstake => "unstake",
             ActionType::WithdrawStake => "withdraw_stake",
-            _ => "unknown",
+            ActionType::Unknown => "unknown",
         }
     }
     pub fn value_string(&self) -> String {
@@ -43,20 +38,20 @@ impl ActionType {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ActionData {
+    // 时间序列字段
+    pub date_time: Option<DateTime>,
+    // 元数据
+    pub metadata: Metadata,
+    // 交易时间戳
+    pub timestamp: i64,
     // 交易签名
     pub signature: String,
-    // 区块时间戳
-    pub block_time: i64,
     // 时间槽
     pub slot: u64,
     // 交易类型，TokenSwap，AddLiquidity，RemoveLiquidity
     pub action_type: String,
-    // 签名者即交易者
-    pub signer: String,
-    // 池子账户地址
-    pub pair: String,
     // 代币0账户地址
     pub token_a: String,
     // 代币a的数量
@@ -71,20 +66,42 @@ pub struct ActionData {
     pub decimals_b: u8,
     // gas消耗
     pub fee: u64,
+
+}
+
+// 元数据字段
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Metadata {
+    // 签名者
+    pub signer: String,
+    // pair地址，即ammid
+    pub pair: String,
 }
 
 impl ActionData {
     pub fn default() -> ActionData {
         let data = ActionData {
-            action_type: "Unknown".to_string(),
-            ..Default::default()
+            date_time: None,
+            timestamp: 0,
+            signature: "".to_string(),
+            slot: 0,
+            action_type: "".to_string(),
+            token_a: "".to_string(),
+            amount_a: 0.0,
+            decimals_a: 0,
+            token_b: "".to_string(),
+            amount_b: 0.0,
+            decimals_b: 0,
+            fee: 0,
+            metadata: Metadata {
+                signer: "".to_string(),
+                pair: "".to_string(),
+            },
         };
         data
     }
     // 检查
     pub fn check(&self) -> bool {
-        !self.token_b.is_empty() && !self.token_a.is_empty() && self.action_type != "Unknown"
+        !self.token_b.is_empty() && !self.token_a.is_empty() && !self.metadata.pair.is_empty() && !self.metadata.signer.is_empty()
     }
 }
-
-pub struct Sign {}
