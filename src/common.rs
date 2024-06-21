@@ -12,16 +12,19 @@ use solana_sdk::pubkey::Pubkey;
 
 
 pub enum ProgramID {
-    RaydiumAuthorityV4,
+    #[allow(unused_variables)]
     RaydiumLiquidityPoolV4,
+    #[allow(unused_variables)]
+    RaydiumAuthorityV4,
+    #[allow(unused_variables)]
     JupiterAggregatorV6,
 }
 
 impl ProgramID {
     pub fn value(&self) -> &'static str {
         match self {
-            ProgramID::RaydiumAuthorityV4 => { "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1" }
             ProgramID::RaydiumLiquidityPoolV4 => { "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8" }
+            ProgramID::RaydiumAuthorityV4 => { "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1" }
             ProgramID::JupiterAggregatorV6 => { "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4" }
         }
     }
@@ -34,6 +37,7 @@ impl ProgramID {
     }
 }
 
+#[allow(unused_variables)]
 pub enum TokenID {
     WSOL
 }

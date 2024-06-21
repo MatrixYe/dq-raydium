@@ -122,7 +122,7 @@ impl From<SubscribeUpdateTransactionStatus> for TransactionStatusPretty {
 
 ///
 /// ## Solana version info
-/// ```json
+/// ```
 /// "{\"version\":{\"package\":\"yellowstone-grpc-geyser\",\"version\":\"1.14.1+solana.1.17.31\",\"proto\":\"1.14.0+solana.1.17.31\",\"solana\":\"1.17.31\",\"git\":\"46ecf8c\",\"rustc\":\"1.73.0\",\"buildts\":\"2024-05-30T03:39:31.649324344Z\"},\"extra\":{\"hostname\":\"m3-dimsum-ewr-9\"}}"
 /// ```
 #[derive(Debug, Deserialize)]

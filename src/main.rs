@@ -236,46 +236,11 @@ async fn init_mongo_client(endpoint: &str) -> Result<Client> {
     Ok(mg)
 }
 
-// #[tokio::main]
-// async fn main() -> Result<()> {
-//     // let endpoint = "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053";
-//     // let token = "34df4c72-5d54-49ba-ae2c-2aa1d50679ce";
-//     let mg_connect_str = "mongodb://root:nopassword@127.0.0.1:5011/";
-//
-//     let mg = init_mongo_client(mg_connect_str).await?;
-//     // Example ActionData
-// // Example ActionData
-//     let ts = Utc::now().timestamp_millis();
-//     let action_data = ActionData {
-//         date_time: Some(DateTime::from_millis(ts)),
-//         timestamp: ts, // 毫秒时间戳
-//         signature: "unique_signature".to_string(),
-//         slot: 123456789,
-//         action_type: "TokenSwap".to_string(),
-//         token_a: "token_a_address".to_string(),
-//         amount_a: 100.0,
-//         decimals_a: 6,
-//         token_b: "token_b_address".to_string(),
-//         amount_b: 200.0,
-//         decimals_b: 6,
-//         fee: 5000,
-//         metadata: Metadata {
-//             signer: "signer_address".to_string(),
-//             pair: "pair_address".to_string(),
-//         },
-//     };
-//     insert_action_data(&mg, action_data).await?;
-//
-//     Ok(())
-// }
-
-
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::Builder::from_default_env().filter_level(log::LevelFilter::Info).init();
     info!("this is application start ... ... !");
-    let date_time = Utc::now();
-    println!("{:?}", date_time);
+
     // 初始化mongodb 客户端
     let mg_connect_str = "mongodb://root:nopassword@127.0.0.1:5011/";
     let mg = init_mongo_client(mg_connect_str).await?;
@@ -306,29 +271,21 @@ async fn main() -> Result<()> {
     info!("status: {:?}", check_response.status());
     // 订阅指定账户下的实时交易
     let mut txmap: TransactionsFilterMap = HashMap::new();
-    let target_accounts = vec!["675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8".to_string()];
+    // 构建交易过滤器，指定目标账户、屏蔽投票交易、屏蔽失败交易
     let filter = SubscribeRequestFilterTransactions {
         vote: Some(false),
         failed: Some(false),
         signature: None,
-        account_include: target_accounts,
+        account_include: vec![RaydiumLiquidityPoolV4.value_str()],
         account_exclude: vec![],
         account_required: vec![],
     };
     txmap.insert("raydium".to_owned(), filter);
 
-    // 订阅请求
     let subscriberequest = SubscribeRequest {
-        accounts: Default::default(),
-        slots: Default::default(),
         transactions: txmap,
-        transactions_status: Default::default(),
-        blocks: Default::default(),
-        blocks_meta: Default::default(),
-        entry: Default::default(),
-        commitment: Some(CommitmentLevel::Finalized as i32),
-        accounts_data_slice: vec![],
-        ping: None,
+        commitment: Some(CommitmentLevel::Confirmed as i32),
+        ..Default::default()
     };
 
     let (mut sub, mut stream) = client.subscribe_with_request(Some(subscriberequest)).await?;
@@ -337,14 +294,9 @@ async fn main() -> Result<()> {
         match message {
             Ok(msg) => {
                 match msg.update_oneof {
-                    Some(UpdateOneof::Account(account)) => {
-                        // let account: AccountPretty = account.into();
-                        // info!("new account update: filters {:?}, account: {:#?}",msg.filters, account);
-                        continue;
-                    }
                     Some(UpdateOneof::Transaction(tx)) => {
                         let transaction: TransactionPretty = tx.into();
-                        // info!("new transaction update: filters {:?}",msg.filters);
+                        info!("new transaction update: filters {:?}",msg.filters);
                         match handle_transaction_update(transaction).await {
                             Ok(action) => {
                                 // info!("action parse success:\n{:?}", action);
@@ -358,15 +310,9 @@ async fn main() -> Result<()> {
                                 }
                             }
                             Err(e) => {
-                                warn!("parse fail\n{:?}",e.to_string())
+                                warn!("parse fail{:?}",e.to_string())
                             }
                         }
-                        // break;
-                        continue;
-                    }
-                    Some(UpdateOneof::TransactionStatus(status)) => {
-                        let status: TransactionStatusPretty = status.into();
-                        // info!("new transaction update: filters {:?}, transaction status: {:?}",msg.filters, status);
                         continue;
                     }
                     Some(UpdateOneof::Ping(_)) => {
@@ -388,6 +334,3 @@ async fn main() -> Result<()> {
     }
     Ok(())
 }
-
-
-

@@ -1,3 +1,4 @@
+
 use mongodb::bson::{DateTime, doc};
 use serde::{Deserialize, Serialize};
 
@@ -5,18 +6,23 @@ pub enum ActionType {
     // 掉期
     TokenSwap,
     // 切分掉期
+    #[allow(unused_variables)]
     AggTokenSwap,
     // 添加流动性
     AddLiquidity,
     // 移除流动性
     RemoveLiquidity,
     //
+    #[allow(unused_variables)]
     Stake,
     //
+    #[allow(unused_variables)]
     Unstake,
     //
+    #[allow(unused_variables)]
     WithdrawStake,
     //
+    #[allow(unused_variables)]
     Unknown,
 }
 
