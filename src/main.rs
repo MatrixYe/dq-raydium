@@ -10,21 +10,21 @@ use chrono::Utc;
 use env_logger;
 use futures::{future::TryFutureExt, sink::SinkExt, stream::StreamExt};
 use log::{error, info, warn};
-use mongodb::bson::{doc, DateTime, Document};
+use mongodb::{Client, IndexModel};
+use mongodb::bson::{DateTime, doc, Document};
 use mongodb::options::{
     ClientOptions, CreateCollectionOptions, IndexOptions, ServerApi, ServerApiVersion,
     TimeseriesGranularity, TimeseriesOptions,
 };
-use mongodb::{Client, IndexModel};
 use serde_json;
 use solana_sdk::{bs58, pubkey::Pubkey, signature::Signature, transaction::TransactionError};
-use solana_transaction_status::option_serializer::OptionSerializer;
-use solana_transaction_status::parse_accounts::ParsedAccount;
 use solana_transaction_status::{
     EncodedTransaction, EncodedTransactionWithStatusMeta, UiInnerInstructions, UiInstruction,
     UiMessage, UiParsedInstruction, UiParsedMessage, UiTransactionEncoding,
     UiTransactionStatusMeta,
 };
+use solana_transaction_status::option_serializer::OptionSerializer;
+use solana_transaction_status::parse_accounts::ParsedAccount;
 use yellowstone_grpc_client::{GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::prelude::{
@@ -334,7 +334,7 @@ async fn main() -> Result<()> {
                             ping: Some(SubscribeRequestPing { id: 1 }),
                             ..Default::default()
                         })
-                        .await?;
+                            .await?;
                         continue;
                     }
                     _ => {
