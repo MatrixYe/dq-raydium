@@ -1,8 +1,10 @@
-
 use mongodb::bson::{DateTime, doc};
 use serde::{Deserialize, Serialize};
 
 pub enum ActionType {
+    // 创建新交易对
+    #[allow(unused_variables)]
+    Create,
     // 掉期
     TokenSwap,
     // 切分掉期
@@ -29,6 +31,7 @@ pub enum ActionType {
 impl ActionType {
     pub fn value(&self) -> &'static str {
         match self {
+            ActionType::Create => "create",
             ActionType::TokenSwap => "swap",
             ActionType::AggTokenSwap => "agg_swap",
             ActionType::AddLiquidity => "add",
@@ -108,6 +111,10 @@ impl ActionData {
     }
     // 检查
     pub fn check(&self) -> bool {
-        !self.token_b.is_empty() && !self.token_a.is_empty() && !self.metadata.pair.is_empty() && !self.metadata.signer.is_empty()
+        !self.token_b.is_empty()
+            && !self.token_a.is_empty()
+            && !self.metadata.pair.is_empty()
+            && !self.metadata.signer.is_empty()
+            && !self.action_type.is_empty()
     }
 }

@@ -4,7 +4,7 @@ use std::fmt::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use chrono::Utc;
 use env_logger;
@@ -43,7 +43,8 @@ mod common;
 mod pretty;
 
 const MG_DB_NAME_RAYDIUM: &str = "raydium";
-const MG_COLL_NAME_ACTIONS: &str = "actions";
+const MG_COLL_ACTIONS: &str = "actions";
+const MG_COLL_NEW_PAIRS: &str = "newpairs";
 
 type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
 type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
@@ -109,7 +110,7 @@ async fn handle_transaction_update(transaction: TransactionPretty) -> Result<Act
     // 解析内部交易
     if let OptionSerializer::Some(ui_inner_ins) = meta.inner_instructions {
         for iv in ui_inner_ins {
-            let fi = iv.index;
+            let _fi = iv.index;
             for (i, instruction) in iv.instructions.iter().enumerate() {
                 match instruction {
                     UiInstruction::Compiled(_) => {}
@@ -152,17 +153,20 @@ async fn handle_transaction_update(transaction: TransactionPretty) -> Result<Act
                     .find(|pre| pre.account_index == post_balance.account_index)
                 {
                     let token = post_balance.mint.clone();
-                    let change = post_balance.ui_token_amount.ui_amount.unwrap_or(0.0)
-                        - pre_balance.ui_token_amount.ui_amount.unwrap();
+                    let pre = pre_balance.ui_token_amount.ui_amount.unwrap_or(0.0);
+                    let post = post_balance.ui_token_amount.ui_amount.unwrap_or(0.0);
+                    let change = post - pre;
                     let decimals = post_balance.ui_token_amount.decimals;
 
-                    token_balance_change.push((token, change, decimals));
+                    token_balance_change.push((token, change, decimals, pre, post));
                 } else {
                     // 如果 pre_balance 不存在，表示这是一个新的 token，则认为 pre_balance 为 0
                     let token = post_balance.mint.clone();
-                    let change = post_balance.ui_token_amount.ui_amount.unwrap_or(0.0);
+                    let pre = 0.0;
+                    let post = post_balance.ui_token_amount.ui_amount.unwrap_or(0.0);
+                    let change = post - pre;
                     let decimals = post_balance.ui_token_amount.decimals;
-                    token_balance_change.push((token, change, decimals));
+                    token_balance_change.push((token, change, decimals, pre, post));
                 }
             }
         }
@@ -171,34 +175,61 @@ async fn handle_transaction_update(transaction: TransactionPretty) -> Result<Act
         return Err(anyhow!("{:?} token_balance_change.len() != 2", signature));
     }
 
-    let c0 = token_balance_change.get(0).unwrap().clone();
-    let c1 = token_balance_change.get(1).unwrap().clone();
-    action_data.token_a = c0.0;
-    action_data.amount_a = c0.1 * -1.0;
-    action_data.decimals_a = c0.2;
+    let a = token_balance_change.get(0).unwrap().clone();
+    let b = token_balance_change.get(1).unwrap().clone();
 
-    action_data.token_b = c1.0;
-    action_data.amount_b = c1.1 * -1.0;
-    action_data.decimals_b = c1.2;
+    let a_token = a.0;
+    let a_change = a.1;
+    let a_decimals = a.2;
+    let a_pre = a.3;
+    let a_post = a.4;
 
-    if action_data.amount_a == 0.0 || action_data.amount_b == 0.0 {
+    let b_token = b.0;
+    let b_change = b.1;
+    let b_decimals = b.2;
+    let b_pre = b.3;
+    let b_post = b.4;
+
+    // 忽略无关交易
+    if a_change == 0.0 || b_change == 0.0 {
         return Err(anyhow!(
             "{:?} action_data.amount_a == 0.0 || action_data.amount_b == 0.0",
             signature
         ));
     }
 
-    if action_data.amount_a > 0.0 && action_data.amount_b < 0.0
-        || action_data.amount_a < 0.0 && action_data.amount_b > 0.0
-    {
+    // 填充数据信息
+    action_data.token_a = a_token;
+    action_data.amount_a = -1.0 * a_change;
+    action_data.decimals_a = a_decimals;
+    action_data.token_b = b_token;
+    action_data.amount_b = -1.0 * b_change;
+    action_data.decimals_b = b_decimals;
+
+
+    // SWAP B=>A
+    if a_change > 0.0 && b_change < 0.0 {
         action_data.action_type = ActionType::TokenSwap.value_string();
     }
-    if action_data.amount_a > 0.0 && action_data.amount_b > 0.0 {
+    // SWAP A=>B
+    if a_change < 0.0 && b_change > 0.0 {
+        action_data.action_type = ActionType::TokenSwap.value_string();
+    }
+
+    // ADD or Create
+    if a_change > 0.0 && b_change > 0.0 {
+        if a_pre == 0.0 && b_pre == 0.0 {
+            action_data.action_type = ActionType::Create.value_string();
+        } else {
+            // 普通ADD
+            action_data.action_type = ActionType::AddLiquidity.value_string();
+        }
+    }
+    // REMOVE
+    if a_change < 0.0 && b_change < 0.0 {
         action_data.action_type = ActionType::RemoveLiquidity.value_string();
     }
-    if action_data.amount_a < 0.0 && action_data.amount_b < 0.0 {
-        action_data.action_type = ActionType::AddLiquidity.value_string();
-    }
+
 
     if !action_data.check() {
         return Err(anyhow!("{:?} unkonwn action data", signature));
@@ -209,14 +240,16 @@ async fn handle_transaction_update(transaction: TransactionPretty) -> Result<Act
 // 插入数据
 async fn insert_action_data(client: &Client, action_data: ActionData) -> Result<String> {
     let db = client.database(MG_DB_NAME_RAYDIUM);
-    let collection = db.collection::<ActionData>(MG_COLL_NAME_ACTIONS);
-    let s = &action_data.signature.clone();
+    let sig = &action_data.signature.clone();
+    let action_type = &action_data.action_type.clone();
 
-    let result = collection.insert_one(action_data, None).await;
-    match result {
-        Ok(_) => Ok(s.to_string()),
-        Err(e) => Err(anyhow!(e.to_string())),
+    if action_type.eq(ActionType::Create.value()) {
+        info!("new pair is created");
+        db.collection::<ActionData>(MG_COLL_NEW_PAIRS).insert_one(action_data.clone(), None).await.context("insert MG_COLL_NEW_PAIRS fail")?;
     }
+
+    db.collection::<ActionData>(MG_COLL_ACTIONS).insert_one(action_data, None).await.context("insert MG_COLL_ACTIONS fail")?;
+    Ok(sig.to_string())
 }
 
 // 连接mongodb数据库
@@ -226,7 +259,7 @@ async fn init_mongo_client(endpoint: &str) -> Result<Client> {
     let mg = Client::with_options(client_options)?;
     let database = mg.database(MG_DB_NAME_RAYDIUM);
     let collection_names = database.list_collection_names(None).await?;
-    if !collection_names.contains(&MG_COLL_NAME_ACTIONS.to_string()) {
+    if !collection_names.contains(&MG_COLL_ACTIONS.to_string()) {
         // 创建时间序列集合
         let mut options = CreateCollectionOptions::default();
         let timeseries_options = TimeseriesOptions::builder()
@@ -236,7 +269,7 @@ async fn init_mongo_client(endpoint: &str) -> Result<Client> {
             .build();
         options.timeseries = Some(timeseries_options);
         database
-            .create_collection(MG_COLL_NAME_ACTIONS, options)
+            .create_collection(MG_COLL_ACTIONS, options)
             .await?;
     }
     Ok(mg)
@@ -327,7 +360,8 @@ async fn main() -> Result<()> {
                                 warn!("parse fail{:?}", e.to_string())
                             }
                         }
-                        continue;
+                        // continue;
+                        break;
                     }
                     Some(UpdateOneof::Ping(_)) => {
                         sub.send(SubscribeRequest {
