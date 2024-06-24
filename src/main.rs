@@ -10,21 +10,21 @@ use chrono::Utc;
 use env_logger;
 use futures::{future::TryFutureExt, sink::SinkExt, stream::StreamExt};
 use log::{error, info, warn};
-use mongodb::{Client, IndexModel};
-use mongodb::bson::{DateTime, doc, Document};
+use mongodb::bson::{doc, DateTime, Document};
 use mongodb::options::{
     ClientOptions, CreateCollectionOptions, IndexOptions, ServerApi, ServerApiVersion,
     TimeseriesGranularity, TimeseriesOptions,
 };
+use mongodb::{Client, IndexModel};
 use serde_json;
 use solana_sdk::{bs58, pubkey::Pubkey, signature::Signature, transaction::TransactionError};
+use solana_transaction_status::option_serializer::OptionSerializer;
+use solana_transaction_status::parse_accounts::ParsedAccount;
 use solana_transaction_status::{
     EncodedTransaction, EncodedTransactionWithStatusMeta, UiInnerInstructions, UiInstruction,
     UiMessage, UiParsedInstruction, UiParsedMessage, UiTransactionEncoding,
     UiTransactionStatusMeta,
 };
-use solana_transaction_status::option_serializer::OptionSerializer;
-use solana_transaction_status::parse_accounts::ParsedAccount;
 use yellowstone_grpc_client::{GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::prelude::{
@@ -34,7 +34,7 @@ use yellowstone_grpc_proto::prelude::{
     SubscribeUpdateAccount, SubscribeUpdateTransaction, SubscribeUpdateTransactionStatus,
 };
 
-use crate::action::{ActionData, ActionType, Metadata};
+use crate::action::{ActionData, ActionType, Metadata, NewPairData};
 use crate::common::ProgramID::{RaydiumAuthorityV4, RaydiumLiquidityPoolV4};
 use crate::pretty::{AccountPretty, TransactionPretty, TransactionStatusPretty, VersionInfo};
 
@@ -206,7 +206,6 @@ async fn handle_transaction_update(transaction: TransactionPretty) -> Result<Act
     action_data.amount_b = -1.0 * b_change;
     action_data.decimals_b = b_decimals;
 
-
     // SWAP B=>A
     if a_change > 0.0 && b_change < 0.0 {
         action_data.action_type = ActionType::TokenSwap.value_string();
@@ -230,7 +229,6 @@ async fn handle_transaction_update(transaction: TransactionPretty) -> Result<Act
         action_data.action_type = ActionType::RemoveLiquidity.value_string();
     }
 
-
     if !action_data.check() {
         return Err(anyhow!("{:?} unkonwn action data", signature));
     }
@@ -242,13 +240,19 @@ async fn insert_action_data(client: &Client, action_data: ActionData) -> Result<
     let db = client.database(MG_DB_NAME_RAYDIUM);
     let sig = &action_data.signature.clone();
     let action_type = &action_data.action_type.clone();
-
+    // 如果是创建新池事件，单独插入集合newpairs
     if action_type.eq(ActionType::Create.value()) {
         info!("new pair is created");
-        db.collection::<ActionData>(MG_COLL_NEW_PAIRS).insert_one(action_data.clone(), None).await.context("insert MG_COLL_NEW_PAIRS fail")?;
+        let new_pair = NewPairData::from_action(action_data.clone());
+        db.collection::<NewPairData>(MG_COLL_NEW_PAIRS)
+            .insert_one(new_pair, None)
+            .await
+            .context("insert MG_COLL_NEW_PAIRS fail")?;
     }
-
-    db.collection::<ActionData>(MG_COLL_ACTIONS).insert_one(action_data, None).await.context("insert MG_COLL_ACTIONS fail")?;
+    db.collection::<ActionData>(MG_COLL_ACTIONS)
+        .insert_one(action_data, None)
+        .await
+        .context("insert MG_COLL_ACTIONS fail")?;
     Ok(sig.to_string())
 }
 
@@ -259,6 +263,7 @@ async fn init_mongo_client(endpoint: &str) -> Result<Client> {
     let mg = Client::with_options(client_options)?;
     let database = mg.database(MG_DB_NAME_RAYDIUM);
     let collection_names = database.list_collection_names(None).await?;
+    // 给actions集合创建时间序列
     if !collection_names.contains(&MG_COLL_ACTIONS.to_string()) {
         // 创建时间序列集合
         let mut options = CreateCollectionOptions::default();
@@ -268,10 +273,44 @@ async fn init_mongo_client(endpoint: &str) -> Result<Client> {
             .granularity(Some(TimeseriesGranularity::Seconds))
             .build();
         options.timeseries = Some(timeseries_options);
-        database
-            .create_collection(MG_COLL_ACTIONS, options)
-            .await?;
+        database.create_collection(MG_COLL_ACTIONS, options).await?;
     }
+    // 给newpairs集合创建索引
+    let collection = database.collection::<NewPairData>(MG_COLL_NEW_PAIRS);
+
+    let date_time_index = IndexModel::builder()
+        .keys(doc! { "date_time": -1 })
+        .options(
+            IndexOptions::builder()
+                .name(Some("date_time_index".to_string()))
+                .build(),
+        )
+        .build();
+
+    let signature_index = IndexModel::builder()
+        .keys(doc! { "signature": 1 })
+        .options(
+            IndexOptions::builder()
+                .unique(true)
+                .name(Some("signature_index".to_string()))
+                .build(),
+        )
+        .build();
+
+    let pair_index = IndexModel::builder()
+        .keys(doc! { "pair": 1 })
+        .options(
+            IndexOptions::builder()
+                .unique(true)
+                .name(Some("pair_index".to_string()))
+                .build(),
+        )
+        .build();
+
+    collection
+        .create_indexes(vec![date_time_index, signature_index, pair_index], None)
+        .await?;
+
     Ok(mg)
 }
 
@@ -360,15 +399,15 @@ async fn main() -> Result<()> {
                                 warn!("parse fail{:?}", e.to_string())
                             }
                         }
-                        // continue;
-                        break;
+                        continue;
+                        // break;
                     }
                     Some(UpdateOneof::Ping(_)) => {
                         sub.send(SubscribeRequest {
                             ping: Some(SubscribeRequestPing { id: 1 }),
                             ..Default::default()
                         })
-                            .await?;
+                        .await?;
                         continue;
                     }
                     _ => {

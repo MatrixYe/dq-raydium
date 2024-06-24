@@ -10,7 +10,6 @@ use solana_sdk::pubkey::Pubkey;
 ///
 /// @Description:
 
-
 pub enum ProgramID {
     #[allow(unused_variables)]
     RaydiumLiquidityPoolV4,
@@ -23,9 +22,9 @@ pub enum ProgramID {
 impl ProgramID {
     pub fn value(&self) -> &'static str {
         match self {
-            ProgramID::RaydiumLiquidityPoolV4 => { "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8" }
-            ProgramID::RaydiumAuthorityV4 => { "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1" }
-            ProgramID::JupiterAggregatorV6 => { "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4" }
+            ProgramID::RaydiumLiquidityPoolV4 => "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+            ProgramID::RaydiumAuthorityV4 => "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1",
+            ProgramID::JupiterAggregatorV6 => "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
         }
     }
     pub fn value_str(&self) -> String {
@@ -39,15 +38,16 @@ impl ProgramID {
 
 #[allow(unused_variables)]
 pub enum TokenID {
-    WSOL
+    WSOL,
 }
 
 impl TokenID {
     pub fn value(&self) -> &'static str {
-        match self { TokenID::WSOL => { "So11111111111111111111111111111111111111112" } }
+        match self {
+            TokenID::WSOL => "So11111111111111111111111111111111111111112",
+        }
     }
     pub fn pubkey(&self) -> Pubkey {
         return Pubkey::from_str(self.value()).unwrap();
     }
 }
-

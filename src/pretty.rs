@@ -6,7 +6,9 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::transaction::TransactionError;
 use solana_transaction_status::{EncodedTransactionWithStatusMeta, UiTransactionEncoding};
-use yellowstone_grpc_proto::geyser::{SubscribeUpdateAccount, SubscribeUpdateTransaction, SubscribeUpdateTransactionStatus};
+use yellowstone_grpc_proto::geyser::{
+    SubscribeUpdateAccount, SubscribeUpdateTransaction, SubscribeUpdateTransactionStatus,
+};
 
 /// @Name pretty
 ///
@@ -118,7 +120,6 @@ impl From<SubscribeUpdateTransactionStatus> for TransactionStatusPretty {
         }
     }
 }
-
 
 ///
 /// ## Solana version info

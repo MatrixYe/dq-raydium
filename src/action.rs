@@ -1,4 +1,4 @@
-use mongodb::bson::{DateTime, doc};
+use mongodb::bson::{doc, DateTime};
 use serde::{Deserialize, Serialize};
 
 pub enum ActionType {
@@ -48,6 +48,56 @@ impl ActionType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NewPairData {
+    // 时间序列字段
+    pub date_time: Option<DateTime>,
+    // 交易签名
+    pub signature: String,
+    // 创建者，签名者
+    pub creator: String,
+    // pair地址，即ammid
+    pub pair: String,
+    // 交易时间戳
+    pub timestamp: i64,
+    // 时间槽
+    pub slot: u64,
+    // 代币0账户地址
+    pub token_a: String,
+    // 代币a的数量
+    pub init_amount_a: f64,
+    // 代币a的精度
+    pub decimals_a: u8,
+    // 代币b账户地址
+    pub token_b: String,
+    // 代币b的数量
+    pub init_amount_b: f64,
+    // 代币b精度
+    pub decimals_b: u8,
+    // gas消耗
+    pub fee: u64,
+}
+
+impl NewPairData {
+    pub fn from_action(action: ActionData) -> NewPairData {
+        NewPairData {
+            date_time: action.date_time,
+            signature: action.signature,
+            creator: action.metadata.signer,
+            pair: action.metadata.pair,
+            timestamp: action.timestamp,
+            slot: action.slot,
+            token_a: action.token_a,
+            init_amount_a: action.amount_a.abs(),
+            decimals_a: action.decimals_a,
+            token_b: action.token_b,
+            init_amount_b: action.amount_b.abs(),
+            decimals_b: action.decimals_b,
+            fee: action.fee,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ActionData {
     // 时间序列字段
     pub date_time: Option<DateTime>,
@@ -75,7 +125,6 @@ pub struct ActionData {
     pub decimals_b: u8,
     // gas消耗
     pub fee: u64,
-
 }
 
 // 元数据字段
