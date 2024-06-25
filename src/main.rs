@@ -423,7 +423,7 @@ async fn main() -> Result<()> {
                 utils::send_message(
                     feishu_error_hook,
                     "solana 专属节点 yellowston-grpc连接中断，注意重启!",
-                )?
+                ).await?
             }
         }
     }
