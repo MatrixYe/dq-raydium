@@ -10,21 +10,21 @@ use chrono::Utc;
 use env_logger;
 use futures::{future::TryFutureExt, sink::SinkExt, stream::StreamExt};
 use log::{error, info, warn};
-use mongodb::bson::{doc, DateTime, Document};
+use mongodb::{Client, IndexModel};
+use mongodb::bson::{DateTime, doc, Document};
 use mongodb::options::{
     ClientOptions, CreateCollectionOptions, IndexOptions, ServerApi, ServerApiVersion,
     TimeseriesGranularity, TimeseriesOptions,
 };
-use mongodb::{Client, IndexModel};
 use serde_json;
 use solana_sdk::{bs58, pubkey::Pubkey, signature::Signature, transaction::TransactionError};
-use solana_transaction_status::option_serializer::OptionSerializer;
-use solana_transaction_status::parse_accounts::ParsedAccount;
 use solana_transaction_status::{
     EncodedTransaction, EncodedTransactionWithStatusMeta, UiInnerInstructions, UiInstruction,
     UiMessage, UiParsedInstruction, UiParsedMessage, UiTransactionEncoding,
     UiTransactionStatusMeta,
 };
+use solana_transaction_status::option_serializer::OptionSerializer;
+use solana_transaction_status::parse_accounts::ParsedAccount;
 use yellowstone_grpc_client::{GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
 use yellowstone_grpc_proto::prelude::{
@@ -41,6 +41,7 @@ use crate::pretty::{AccountPretty, TransactionPretty, TransactionStatusPretty, V
 mod action;
 mod common;
 mod pretty;
+mod utils;
 
 const MG_DB_NAME_RAYDIUM: &str = "raydium";
 const MG_COLL_ACTIONS: &str = "actions";
@@ -371,7 +372,8 @@ async fn main() -> Result<()> {
         commitment: Some(CommitmentLevel::Confirmed as i32),
         ..Default::default()
     };
-
+    let mut retry_count = 0;
+    let max_retries = 3;
     let (mut sub, mut stream) = client
         .subscribe_with_request(Some(subscriberequest))
         .await?;
@@ -407,7 +409,7 @@ async fn main() -> Result<()> {
                             ping: Some(SubscribeRequestPing { id: 1 }),
                             ..Default::default()
                         })
-                        .await?;
+                            .await?;
                         continue;
                     }
                     _ => {
@@ -417,8 +419,18 @@ async fn main() -> Result<()> {
             }
             Err(error) => {
                 error!("error: {error:?}");
+                let feishu_error_hook = "https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d";
+                utils::send_message(
+                    feishu_error_hook,
+                    "solana 专属节点 yellowston-grpc连接中断，注意重启!",
+                )?
             }
         }
     }
     Ok(())
 }
+
+// #[tokio::main]
+// async fn main() {
+//     utils::send_message("https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d", "hook test connect success").await.unwrap()
+// }
