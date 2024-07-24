@@ -364,6 +364,7 @@ async fn main() -> Result<()> {
     let mg_connect_str = args.mg_url.as_str();
     let mg = init_mongo_client(mg_connect_str).await?;
     let interval = args.retry_interval;
+    let feishu = args.feishu;
 
     // 初始化solana geyser grpc 客户端
     let endpoint = args.grpc_url;
@@ -442,8 +443,7 @@ async fn main() -> Result<()> {
             }
         }
         tokio::time::sleep(Duration::from_secs(interval)).await;
-        let feishu_error_hook = "https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d";
         let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重启!";
-        utils::send_message(feishu_error_hook, nitify_msg).await?
+        utils::send_message(feishu.clone(), nitify_msg).await?
     }
 }
