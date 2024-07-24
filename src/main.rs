@@ -8,7 +8,8 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use chrono::Utc;
 use env_logger;
-use futures::{future::TryFutureExt, sink::SinkExt, stream::StreamExt};
+use futures::{future::TryFutureExt, Sink, sink::SinkExt, Stream, stream::StreamExt};
+use futures::channel::mpsc::SendError;
 use log::{error, info, warn};
 use mongodb::{Client, IndexModel};
 use mongodb::bson::{DateTime, doc, Document};
@@ -27,12 +28,14 @@ use solana_transaction_status::option_serializer::OptionSerializer;
 use solana_transaction_status::parse_accounts::ParsedAccount;
 use yellowstone_grpc_client::{GeyserGrpcClient, Interceptor};
 use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
+use yellowstone_grpc_proto::geyser::SubscribeUpdate;
 use yellowstone_grpc_proto::prelude::{
     CommitmentLevel, SubscribeRequest, SubscribeRequestFilterAccounts,
     SubscribeRequestFilterBlocks, SubscribeRequestFilterBlocksMeta, SubscribeRequestFilterEntry,
     SubscribeRequestFilterSlots, SubscribeRequestFilterTransactions, SubscribeRequestPing,
     SubscribeUpdateAccount, SubscribeUpdateTransaction, SubscribeUpdateTransactionStatus,
 };
+use yellowstone_grpc_proto::tonic::Status;
 
 use crate::action::{ActionData, ActionType, Metadata, NewPairData};
 use crate::common::ProgramID::{RaydiumAuthorityV4, RaydiumLiquidityPoolV4};
@@ -43,6 +46,7 @@ mod common;
 mod pretty;
 mod utils;
 
+// mongo时
 const MG_DB_NAME_RAYDIUM: &str = "raydium";
 const MG_COLL_ACTIONS: &str = "actions";
 const MG_COLL_NEW_PAIRS: &str = "newpairs";
@@ -241,7 +245,7 @@ async fn insert_action_data(client: &Client, action_data: ActionData) -> Result<
     let db = client.database(MG_DB_NAME_RAYDIUM);
     let sig = &action_data.signature.clone();
     let action_type = &action_data.action_type.clone();
-    // 如果是创建新池事件，单独插入集合newpairs
+    // 如果是创建新池事件，单独插入集合new pairs
     if action_type.eq(ActionType::Create.value()) {
         info!("new pair is created");
         let new_pair = NewPairData::from_action(action_data.clone());
@@ -315,45 +319,9 @@ async fn init_mongo_client(endpoint: &str) -> Result<Client> {
     Ok(mg)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
-        .init();
-    info!("this is application start ... ... !");
-
-    // 初始化mongodb 客户端
-    let mg_connect_str = "mongodb://root:nopassword@127.0.0.1:5011/";
-    let mg = init_mongo_client(mg_connect_str).await?;
-
-    // 初始化solana geysergrpc 客户端
-    let endpoint = "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053";
-    let x_token = "34df4c72-5d54-49ba-ae2c-2aa1d50679ce";
-    info!("solana endpoint: {:?}", endpoint);
-    info!("solana x-token: {:?}", x_token);
-
-    let mut client = GeyserGrpcClient::build_from_shared(endpoint)
-        .expect("connect solana fail,error endpoint")
-        .x_token(Some(x_token))
-        .expect("connect solana fail,error x-token")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(10))
-        .connect()
-        .await
-        .expect("connect solana fail,server error");
-    info!("connect solana validator success.");
-    // 获取节点版本号
-    let version_response = client.get_version().await?;
-    let version_info: VersionInfo =
-        serde_json::from_str(version_response.version.as_str()).unwrap();
-    let check_response = client.health_check().await?;
-
-    info!("version:{:?}", version_info.version.version);
-    info!("solana:{:?}", version_info.version.solana);
-    info!("rustc:{:?}", version_info.version.rustc);
-    info!("proto:{:?}", version_info.version.proto);
-    info!("hostname:{:?}", version_info.extra.hostname);
-    info!("status: {:?}", check_response.status());
+// 创建grpc 订阅请求参数
+fn create_request() -> SubscribeRequest {
+    info!("构建grpc请求参数");
     // 订阅指定账户下的实时交易
     let mut txmap: TransactionsFilterMap = HashMap::new();
     // 构建交易过滤器，指定目标账户、屏蔽投票交易、屏蔽失败交易
@@ -367,70 +335,104 @@ async fn main() -> Result<()> {
     };
     txmap.insert("raydium".to_owned(), filter);
 
-    let subscriberequest = SubscribeRequest {
+    let subscribe_request = SubscribeRequest {
         transactions: txmap,
         commitment: Some(CommitmentLevel::Confirmed as i32),
         ..Default::default()
     };
-    let mut retry_count = 0;
-    let max_retries = 3;
-    let (mut sub, mut stream) = client
-        .subscribe_with_request(Some(subscriberequest))
-        .await?;
-    // 接收消息并处理
-    while let Some(message) = stream.next().await {
-        match message {
-            Ok(msg) => {
-                match msg.update_oneof {
-                    Some(UpdateOneof::Transaction(tx)) => {
-                        let transaction: TransactionPretty = tx.into();
-                        info!("new transaction update: filters {:?}", msg.filters);
-                        match handle_transaction_update(transaction).await {
-                            Ok(action) => {
-                                // info!("action parse success:\n{:?}", action);
-                                match insert_action_data(&mg, action).await {
-                                    Ok(s) => {
-                                        info!("Success: {:?}", s);
-                                    }
-                                    Err(e) => {
-                                        error!("Error inserting: {:?}", e.to_string());
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                warn!("parse fail{:?}", e.to_string())
-                            }
-                        }
-                        continue;
-                        // break;
-                    }
-                    Some(UpdateOneof::Ping(_)) => {
-                        sub.send(SubscribeRequest {
-                            ping: Some(SubscribeRequestPing { id: 1 }),
-                            ..Default::default()
-                        })
-                            .await?;
-                        continue;
-                    }
-                    _ => {
-                        continue;
-                    }
-                }
-            }
-            Err(error) => {
-                error!("error: {error:?}");
-                let feishu_error_hook = "https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d";
-                utils::send_message(
-                    feishu_error_hook,
-                    "solana 专属节点 yellowston-grpc连接中断，注意重启!",
-                ).await?
-            }
-        }
-    }
-    Ok(())
+    subscribe_request
 }
 
-// #[tokio::main]
-// async fn main() {
-//     utils::send_message("https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d", "hook test connect success").await.unwrap()
-// }
+#[tokio::main]
+async fn main() -> Result<()> {
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+    info!("this is application start ... ... !");
+
+    // 初始化mongodb 客户端
+    let mg_connect_str = "mongodb://root:nopassword@127.0.0.1:5011/";
+    let mg = init_mongo_client(mg_connect_str).await?;
+
+    // 初始化solana geyser grpc 客户端
+    let endpoint = "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053";
+    let x_token = "34df4c72-5d54-49ba-ae2c-2aa1d50679ce";
+    info!("solana endpoint: {:?}", endpoint);
+    info!("solana x-token: {:?}", x_token);
+    // 连接solana 节点 by YellowSton Grpc
+    let mut client = GeyserGrpcClient::build_from_shared(endpoint)
+        .expect("connect solana fail,error endpoint")
+        .x_token(Some(x_token))
+        .expect("connect solana fail,error x-token")
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(10))
+        .connect()
+        .await
+        .expect("connect solana fail,server error");
+    info!("connect solana validator success.");
+
+    // 获取节点信息
+    let version_response = client.get_version().await?;
+    let version_info: VersionInfo =
+        serde_json::from_str(version_response.version.as_str()).unwrap();
+    let check_response = client.health_check().await?;
+    info!("version:{:?}", version_info.version.version);
+    info!("solana:{:?}", version_info.version.solana);
+    info!("rustc:{:?}", version_info.version.rustc);
+    info!("proto:{:?}", version_info.version.proto);
+    info!("hostname:{:?}", version_info.extra.hostname);
+    info!("status: {:?}", check_response.status());
+
+    loop {
+        // 构建订阅请求
+        let request = create_request();
+        // 消息流
+        let (mut sub, mut stream) = client.subscribe_with_request(Some(request)).await?;
+        // 死循环接收消息并处理
+        while let Some(message) = stream.next().await {
+            if message.is_err() {
+                break;
+            }
+            let msg = message.unwrap();
+            match msg.update_oneof {
+                Some(UpdateOneof::Transaction(tx)) => {
+                    let transaction: TransactionPretty = tx.into();
+                    info!("new transaction update: filters {:?}", msg.filters);
+                    match handle_transaction_update(transaction).await {
+                        Ok(action) => {
+                            // info!("action parse success:\n{:?}", action);
+                            match insert_action_data(&mg, action).await {
+                                Ok(s) => {
+                                    info!("Success: {:?}", s);
+                                }
+                                Err(e) => {
+                                    error!("Error inserting: {:?}", e.to_string());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("parse fail{:?}", e.to_string())
+                        }
+                    }
+                    continue;
+                }
+                Some(UpdateOneof::Ping(_)) => {
+                    // todo 处理发送ping 异常的问题
+                    sub.send(SubscribeRequest {
+                        ping: Some(SubscribeRequestPing { id: 1 }),
+                        ..Default::default()
+                    })
+                        .await?;
+                    continue;
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(15)).await;
+        let feishu_error_hook = "https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d";
+        let nitify_msg = "solana 专属节点 yellowston-grpc连接中断，自动重启!";
+        utils::send_message(feishu_error_hook, nitify_msg).await?
+    }
+}
