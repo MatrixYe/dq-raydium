@@ -7,6 +7,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use chrono::Local;
 use chrono::Utc;
+use clap::{arg, Parser};
 use env_logger;
 use futures::{future::TryFutureExt, Sink, sink::SinkExt, Stream, stream::StreamExt};
 use futures::channel::mpsc::SendError;
@@ -38,6 +39,7 @@ use yellowstone_grpc_proto::prelude::{
 use yellowstone_grpc_proto::tonic::Status;
 
 use crate::action::{ActionData, ActionType, Metadata, NewPairData};
+use crate::cli::Args;
 use crate::common::ProgramID::{RaydiumAuthorityV4, RaydiumLiquidityPoolV4};
 use crate::pretty::{AccountPretty, TransactionPretty, TransactionStatusPretty, VersionInfo};
 
@@ -45,6 +47,7 @@ mod action;
 mod common;
 mod pretty;
 mod utils;
+mod cli;
 
 // mongo时
 const MG_DB_NAME_RAYDIUM: &str = "raydium";
@@ -348,15 +351,23 @@ async fn main() -> Result<()> {
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Info)
         .init();
-    info!("this is application start ... ... !");
+    info!("Application Start ... ... !");
+
+    let args = Args::parse();
+    info!("Mongo URL: {}", args.mg_url);
+    info!("gRPC URL: {}", args.grpc_url);
+    info!("gRPC X-Token: {}", args.grpc_x_token);
+    info!("Retry Interval: {:?}", args.retry_interval);
+    info!("FeiShu hook url: {:?}", args.feishu);
 
     // 初始化mongodb 客户端
-    let mg_connect_str = "mongodb://root:nopassword@127.0.0.1:5011/";
+    let mg_connect_str = args.mg_url.as_str();
     let mg = init_mongo_client(mg_connect_str).await?;
+    let interval = args.retry_interval;
 
     // 初始化solana geyser grpc 客户端
-    let endpoint = "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053";
-    let x_token = "34df4c72-5d54-49ba-ae2c-2aa1d50679ce";
+    let endpoint = args.grpc_url;
+    let x_token = args.grpc_x_token;
     info!("solana endpoint: {:?}", endpoint);
     info!("solana x-token: {:?}", x_token);
     // 连接solana 节点 by YellowSton Grpc
@@ -430,9 +441,9 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        tokio::time::sleep(Duration::from_secs(15)).await;
+        tokio::time::sleep(Duration::from_secs(interval)).await;
         let feishu_error_hook = "https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d";
-        let nitify_msg = "solana 专属节点 yellowston-grpc连接中断，自动重启!";
+        let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重启!";
         utils::send_message(feishu_error_hook, nitify_msg).await?
     }
 }
