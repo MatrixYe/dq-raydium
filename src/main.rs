@@ -442,8 +442,8 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        tokio::time::sleep(Duration::from_secs(interval)).await;
         let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重启!";
-        utils::send_message(feishu.clone(), nitify_msg).await?
+        utils::send_message(feishu.clone(), nitify_msg).await?;
+        tokio::time::sleep(Duration::from_secs(interval)).await;
     }
 }
