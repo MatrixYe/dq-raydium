@@ -1,0 +1,23 @@
+[package]
+name = "sync"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+yellowstone-grpc-proto = { workspace = true }
+yellowstone-grpc-client = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status = { workspace = true }
+hex = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+futures = { workspace = true }
+env_logger = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+clap = { workspace = true }
+mongodb = { workspace = true }
+

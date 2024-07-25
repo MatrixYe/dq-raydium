@@ -1,26 +1,24 @@
-[package]
-name = "dq-raydium"
-version = "0.1.0"
-edition = "2021"
-authors = ["Matrix.Ye"]
-description = "raydium swap data sync and prse"
+[workspace]
+members = [
+    "sync",
+    "export"
+]
 
-[dependencies]
+[workspace.dependencies]
+tokio = { version = "1.37.0", features = ["full"] }
 yellowstone-grpc-proto = "1.14.0"
 yellowstone-grpc-client = "1.14.0"
-tokio = { version = "1.37.0", features = ["full"] }
-anyhow = "1.0.86"
-log = "0.4.21"
 solana-sdk = "1.17.28"
 solana-transaction-status = "1.17.28"
+anyhow = "1.0.86"
+log = "0.4.21"
+env_logger = "0.11.3"
 hex = "0.4.3"
 serde_json = "1.0.117"
 serde = { version = "1.0.203", features = ["derive"] }
 futures = "0.3.30"
-env_logger = "0.11.3"
 chrono = "0.4.38"
 reqwest = { version = "0.12.0", features = ["json"] }
 clap = { version = "4.5.10", features = ["derive"] }
-[dependencies.mongodb]
-version = "2.8.2"
-features = ["tokio-sync"]
+mongodb = { version = "2.8.2", features = ["tokio-sync"] }
+
