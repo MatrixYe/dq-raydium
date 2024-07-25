@@ -11,7 +11,7 @@ use clap::Parser;
 
 /// 命令行参数结构体
 #[derive(Parser, Debug)]
-#[command(name = "MyApp", about = "An example CLI for argument parsing")]
+#[command(name = "Crate:Sync", about = "An example CLI for argument parsing")]
 pub struct Args {
     /// Mongo数据库连接URL
     #[arg(long)]

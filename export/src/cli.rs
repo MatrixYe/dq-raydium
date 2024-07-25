@@ -6,7 +6,13 @@
 ///
 /// @Description:
 ///
+use clap::Parser;
 
-pub struct Args{
+#[derive(Parser, Debug)]
+pub struct Args {
+    #[arg(long)]
+    pub mg_url: String,
 
+    #[arg(long)]
+    pub feishu: Option<String>,
 }

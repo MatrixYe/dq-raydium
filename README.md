@@ -4,9 +4,9 @@
 订阅Rar消息
 
 
-### 运行
+### 运行同步解析器
 ```bash
-cargo run --release -- --mg-url "mongodb://example.com" \
+cargo run --bin sync --release -- --mg-url "mongodb://example.com" \
 --grpc-url "grpc://example.com" \
 --grpc-x-token "my_token" \
 --retry-interval 30 \
@@ -20,10 +20,17 @@ cargo run --release -- --mg-url "mongodb://example.com" \
 - feishu:可选，默认None，消息推送地址url，仅限飞书 hook
 
 ```shell
-cargo run --release -- --mg-url "mongodb://root:nopassword@127.0.0.1:5011/" \
+cargo run --bin sync --release -- --mg-url "mongodb://root:nopassword@127.0.0.1:5011/" \
 --grpc-url "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053" \
 --grpc-x-token "34df4c72-5d54-49ba-ae2c-2aa1d50679ce" \
 --retry-interval 15 \
 --feishu "https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d"
 
+```
+
+### 运行定导出脚本
+-[ ] todo 定时脚本依赖crontab运行
+-[ ] todo 执行代码
+```shell
+ cargo run --bin export --release -- --mg-url "mongo://dedede" --feishu "this is feishu url"
 ```
