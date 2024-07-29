@@ -394,7 +394,7 @@ async fn main() -> Result<()> {
     info!("proto:{:?}", version_info.version.proto);
     info!("hostname:{:?}", version_info.extra.hostname);
     info!("status: {:?}", check_response.status());
-
+    utils::send_message(feishu.clone(), "dq-raydium: 同步解析服务已启动。").await?;
     loop {
         // 构建订阅请求
         let request = create_request();
@@ -429,12 +429,15 @@ async fn main() -> Result<()> {
                     continue;
                 }
                 Some(UpdateOneof::Ping(_)) => {
-                    // todo 处理发送ping 异常的问题
-                    sub.send(SubscribeRequest {
+                    // fix 处理发送ping 异常的问题
+                    let p = sub.send(SubscribeRequest {
                         ping: Some(SubscribeRequestPing { id: 1 }),
                         ..Default::default()
-                    })
-                        .await?;
+                    }).await;
+                    match p {
+                        Ok(_) => {}
+                        Err(e) => { warn!("pong send failed{:?}", e.to_string()) }
+                    }
                     continue;
                 }
                 _ => {

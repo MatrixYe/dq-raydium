@@ -23,8 +23,8 @@ cargo run --bin sync --release -- --mg-url "mongodb://example.com" \
 cargo run --bin sync --release -- --mg-url "mongodb://root:nopassword@127.0.0.1:5011/" \
 --grpc-url "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053" \
 --grpc-x-token "34df4c72-5d54-49ba-ae2c-2aa1d50679ce" \
---retry-interval 15 \
---feishu "https://open.feishu.cn/open-apis/bot/v2/hook/1e1c87ee-191d-4513-9daf-6ec739f1b78d"
+--retry-interval 30 \
+--feishu "https://open.feishu.cn/open-apis/bot/v2/hook/1e517e58-39dc-4b53-bb44-9b8914e09e8c"
 
 ```
 
