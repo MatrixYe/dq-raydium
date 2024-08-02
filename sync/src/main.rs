@@ -428,24 +428,24 @@ async fn main() -> Result<()> {
                     }
                     continue;
                 }
-                Some(UpdateOneof::Ping(_)) => {
-                    // fix 处理发送ping 异常的问题
-                    let p = sub.send(SubscribeRequest {
-                        ping: Some(SubscribeRequestPing { id: 1 }),
-                        ..Default::default()
-                    }).await;
-                    match p {
-                        Ok(_) => {}
-                        Err(e) => { warn!("pong send failed{:?}", e.to_string()) }
-                    }
-                    continue;
-                }
+                // Some(UpdateOneof::Ping(_)) => {
+                //     // fix 处理发送ping 异常的问题
+                //     let p = sub.send(SubscribeRequest {
+                //         ping: Some(SubscribeRequestPing { id: 1 }),
+                //         ..Default::default()
+                //     }).await;
+                //     match p {
+                //         Ok(_) => {}
+                //         Err(e) => { warn!("pong send failed{:?}", e.to_string()) }
+                //     }
+                //     continue;
+                // }
                 _ => {
                     continue;
                 }
             }
         }
-        let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重启!";
+        let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重连!";
         utils::send_message(feishu.clone(), nitify_msg).await?;
         tokio::time::sleep(Duration::from_secs(interval)).await;
     }
