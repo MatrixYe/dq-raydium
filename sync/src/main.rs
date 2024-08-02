@@ -428,18 +428,18 @@ async fn main() -> Result<()> {
                     }
                     continue;
                 }
-                // Some(UpdateOneof::Ping(_)) => {
-                //     // fix 处理发送ping 异常的问题
-                //     let p = sub.send(SubscribeRequest {
-                //         ping: Some(SubscribeRequestPing { id: 1 }),
-                //         ..Default::default()
-                //     }).await;
-                //     match p {
-                //         Ok(_) => {}
-                //         Err(e) => { warn!("pong send failed{:?}", e.to_string()) }
-                //     }
-                //     continue;
-                // }
+                Some(UpdateOneof::Ping(_)) => {
+                    // fix 处理发送ping 异常的问题
+                    let p = sub.send(SubscribeRequest {
+                        ping: Some(SubscribeRequestPing { id: 1 }),
+                        ..Default::default()
+                    }).await;
+                    match p {
+                        Ok(_) => {}
+                        Err(e) => { warn!("pong send failed{:?}", e.to_string()) }
+                    }
+                    continue;
+                }
                 _ => {
                     continue;
                 }
