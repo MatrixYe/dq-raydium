@@ -1,11 +1,12 @@
 use anyhow::Result;
-use clap::builder::Str;
+use log::{error, info, warn};
 use reqwest::Client;
 use serde_json::json;
 
 pub(crate) async fn send_message(url: Option<String>, msg: &str) -> Result<()> {
     match url {
         None => {
+            warn!("feishu url is empty,send cancle");
             Ok(())
         }
         Some(u) => {

@@ -40,7 +40,7 @@ fn main() {
         --out={}.csv",
         last_week_str, now_str, file_prefix
     );
-    info!("{}" ,mongoexport_cmd);
+    info!("{}", mongoexport_cmd);
 
     // 执行导出指令
     // let export_status = Command::new("sh")
@@ -56,7 +56,7 @@ fn main() {
 
     // 定义压缩指令
     let gzip_cmd = format!("pv {}.csv | gzip > {}.csv.gz", file_prefix, file_prefix);
-    info!("{}" ,gzip_cmd);
+    info!("{}", gzip_cmd);
 
     // let gzip_status = Command::new("sh")
     //     .arg("-c")
@@ -71,7 +71,7 @@ fn main() {
 
     // 定义移动文件指令
     let mv_cmd = format!("mv {}.csv.gz ~/.file-share-data", file_prefix);
-    info!("{}" ,mv_cmd);
+    info!("{}", mv_cmd);
     //
     // let mv_status = Command::new("sh")
     //     .arg("-c")

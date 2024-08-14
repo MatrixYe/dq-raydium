@@ -5,8 +5,6 @@
 /// @Author Matrix.Ye
 ///
 /// @Description:
-
-
 use clap::Parser;
 
 /// 命令行参数结构体
@@ -32,5 +30,7 @@ pub struct Args {
     // /// 飞书消息推送url
     #[arg(long)]
     pub feishu: Option<String>,
-}
 
+    #[arg(long)]
+    pub restart: bool,
+}

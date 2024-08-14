@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Error;
+use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,8 +10,8 @@ use chrono::Local;
 use chrono::Utc;
 use clap::{arg, Parser};
 use env_logger;
-use futures::{future::TryFutureExt, Sink, sink::SinkExt, Stream, stream::StreamExt};
 use futures::channel::mpsc::SendError;
+use futures::SinkExt;
 use log::{error, info, warn};
 use mongodb::{Client, IndexModel};
 use mongodb::bson::{DateTime, doc, Document};
@@ -36,31 +37,32 @@ use yellowstone_grpc_proto::prelude::{
     SubscribeRequestFilterSlots, SubscribeRequestFilterTransactions, SubscribeRequestPing,
     SubscribeUpdateAccount, SubscribeUpdateTransaction, SubscribeUpdateTransactionStatus,
 };
+use yellowstone_grpc_proto::tonic::codegen::tokio_stream::StreamExt;
 use yellowstone_grpc_proto::tonic::Status;
 
-use crate::action::{ActionData, ActionType, Metadata, NewPairData};
+use crate::action::{ActionData, ActionType, NewPairData};
 use crate::cli::Args;
 use crate::common::ProgramID::{RaydiumAuthorityV4, RaydiumLiquidityPoolV4};
 use crate::pretty::{AccountPretty, TransactionPretty, TransactionStatusPretty, VersionInfo};
 
 mod action;
+mod cli;
 mod common;
 mod pretty;
 mod utils;
-mod cli;
 
 // mongo时
 const MG_DB_NAME_RAYDIUM: &str = "raydium";
 const MG_COLL_ACTIONS: &str = "actions";
 const MG_COLL_NEW_PAIRS: &str = "newpairs";
 
-type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
-type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
+// type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
+// type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
 type TransactionsFilterMap = HashMap<String, SubscribeRequestFilterTransactions>;
-type TransactionsStatusFilterMap = HashMap<String, SubscribeRequestFilterTransactions>;
-type EntryFilterMap = HashMap<String, SubscribeRequestFilterEntry>;
-type BlocksFilterMap = HashMap<String, SubscribeRequestFilterBlocks>;
-type BlocksMetaFilterMap = HashMap<String, SubscribeRequestFilterBlocksMeta>;
+// type TransactionsStatusFilterMap = HashMap<String, SubscribeRequestFilterTransactions>;
+// type EntryFilterMap = HashMap<String, SubscribeRequestFilterEntry>;
+// type BlocksFilterMap = HashMap<String, SubscribeRequestFilterBlocks>;
+// type BlocksMetaFilterMap = HashMap<String, SubscribeRequestFilterBlocksMeta>;
 
 //noinspection ALL,RsMainFunctionNotFound
 async fn handle_transaction_update(transaction: TransactionPretty) -> Result<ActionData> {
@@ -250,12 +252,20 @@ async fn insert_action_data(client: &Client, action_data: ActionData) -> Result<
     let action_type = &action_data.action_type.clone();
     // 如果是创建新池事件，单独插入集合new pairs
     if action_type.eq(ActionType::Create.value()) {
-        info!("new pair is created");
+        info!("new pair is created:{:?}",action_data.signature);
         let new_pair = NewPairData::from_action(action_data.clone());
-        db.collection::<NewPairData>(MG_COLL_NEW_PAIRS)
+
+        let i = db
+            .collection::<NewPairData>(MG_COLL_NEW_PAIRS)
             .insert_one(new_pair, None)
-            .await
-            .context("insert MG_COLL_NEW_PAIRS fail")?;
+            .await;
+        match i {
+            Ok(_) => {}
+            Err(e) => {
+                warn!("insert MG_COLL_NEW_PAIRS fail: {:?}", e);
+                return Ok(sig.to_string());
+            }
+        }
     }
     db.collection::<ActionData>(MG_COLL_ACTIONS)
         .insert_one(action_data, None)
@@ -359,12 +369,14 @@ async fn main() -> Result<()> {
     info!("gRPC X-Token: {}", args.grpc_x_token);
     info!("Retry Interval: {:?}", args.retry_interval);
     info!("FeiShu hook url: {:?}", args.feishu);
+    info!("Restart: {:?}", args.restart);
 
     // 初始化mongodb 客户端
     let mg_connect_str = args.mg_url.as_str();
     let mg = init_mongo_client(mg_connect_str).await?;
     let interval = args.retry_interval;
     let feishu = args.feishu;
+    let restart = args.restart;
 
     // 初始化solana geyser grpc 客户端
     let endpoint = args.grpc_url;
@@ -376,8 +388,8 @@ async fn main() -> Result<()> {
         .expect("connect solana fail,error endpoint")
         .x_token(Some(x_token))
         .expect("connect solana fail,error x-token")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(10))
+        .connect_timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(60))
         .connect()
         .await
         .expect("connect solana fail,server error");
@@ -394,59 +406,77 @@ async fn main() -> Result<()> {
     info!("proto:{:?}", version_info.version.proto);
     info!("hostname:{:?}", version_info.extra.hostname);
     info!("status: {:?}", check_response.status());
-    utils::send_message(feishu.clone(), "dq-raydium: 同步解析服务已启动。").await?;
+    utils::send_message(feishu.clone(), "dq-raydium: 同步解析服务已启动,Good Luck!").await.expect("can not send feishu");
     loop {
         // 构建订阅请求
         let request = create_request();
         // 消息流
-        let (mut sub, mut stream) = client.subscribe_with_request(Some(request)).await?;
+        let (mut sub, mut stream) = client
+            .subscribe_with_request(Some(request))
+            .await
+            .expect("subscribe_with_request failed");
         // 死循环接收消息并处理
+        info!("开始处理订阅...");
         while let Some(message) = stream.next().await {
             if message.is_err() {
-                break;
+                error!("message is error -> continue");
+                error!("status: {:?}", message.err());
+                continue;
             }
+
             let msg = message.unwrap();
             match msg.update_oneof {
                 Some(UpdateOneof::Transaction(tx)) => {
                     let transaction: TransactionPretty = tx.into();
-                    info!("new transaction update: filters {:?}", msg.filters);
+                    // info!("new transaction update: filters {:?}", msg.filters);
                     match handle_transaction_update(transaction).await {
                         Ok(action) => {
                             // info!("action parse success:\n{:?}", action);
                             match insert_action_data(&mg, action).await {
                                 Ok(s) => {
-                                    info!("Success: {:?}", s);
+                                    // info!("Success: {:?}", s);
                                 }
                                 Err(e) => {
-                                    error!("Error inserting: {:?}", e.to_string());
+                                    warn!("Error inserting: {:?}", e.to_string());
                                 }
                             }
                         }
                         Err(e) => {
-                            warn!("parse fail{:?}", e.to_string())
+                            // warn!("parse fail{:?}", e.to_string())
                         }
                     }
-                    continue;
                 }
                 Some(UpdateOneof::Ping(_)) => {
                     // fix 处理发送ping 异常的问题
-                    let p = sub.send(SubscribeRequest {
-                        ping: Some(SubscribeRequestPing { id: 1 }),
-                        ..Default::default()
-                    }).await;
+                    let p = sub
+                        .send(SubscribeRequest {
+                            ping: Some(SubscribeRequestPing { id: 1 }),
+                            ..Default::default()
+                        })
+                        .await;
                     match p {
                         Ok(_) => {}
-                        Err(e) => { warn!("pong send failed{:?}", e.to_string()) }
+                        Err(e) => {
+                            warn!("pong send failed{:?}", e.to_string())
+                        }
                     }
-                    continue;
                 }
+                Some(UpdateOneof::Pong(_)) => {}
+
                 _ => {
                     continue;
                 }
             }
         }
-        let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重连!";
-        utils::send_message(feishu.clone(), nitify_msg).await?;
-        tokio::time::sleep(Duration::from_secs(interval)).await;
+        if restart {
+            let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重连!";
+            utils::send_message(feishu.clone(), nitify_msg).await?;
+            tokio::time::sleep(Duration::from_secs(interval)).await;
+        } else {
+            let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 未重连!";
+            utils::send_message(feishu.clone(), nitify_msg).await?;
+            tokio::time::sleep(Duration::from_secs(interval)).await;
+            exit(0);
+        }
     }
 }
