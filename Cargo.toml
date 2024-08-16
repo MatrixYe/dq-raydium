@@ -1,7 +1,6 @@
 [workspace]
 members = [
-    "sync",
-    "export"
+    "sync"
 ]
 
 [workspace.dependencies]
