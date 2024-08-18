@@ -408,66 +408,8 @@ async fn main() -> Result<()> {
     info!("status: {:?}", check_response.status());
     utils::send_message(feishu.clone(), "dq-raydium: 同步解析服务已启动,Good Luck!").await.expect("can not send feishu");
     loop {
-        // 构建订阅请求
-        let request = create_request();
-        // 消息流
-        let (mut sub, mut stream) = client
-            .subscribe_with_request(Some(request))
-            .await
-            .expect("subscribe_with_request failed");
-        // 死循环接收消息并处理
-        info!("开始处理订阅...");
-        while let Some(message) = stream.next().await {
-            if message.is_err() {
-                error!("message is error -> continue");
-                error!("status: {:?}", message.err());
-                continue;
-            }
+        core(&mut client, mg.clone()).await;
 
-            let msg = message.unwrap();
-            match msg.update_oneof {
-                Some(UpdateOneof::Transaction(tx)) => {
-                    let transaction: TransactionPretty = tx.into();
-                    // info!("new transaction update: filters {:?}", msg.filters);
-                    match handle_transaction_update(transaction).await {
-                        Ok(action) => {
-                            // info!("action parse success:\n{:?}", action);
-                            match insert_action_data(&mg, action).await {
-                                Ok(s) => {
-                                    // info!("Success: {:?}", s);
-                                }
-                                Err(e) => {
-                                    warn!("Error inserting: {:?}", e.to_string());
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            // warn!("parse fail{:?}", e.to_string())
-                        }
-                    }
-                }
-                Some(UpdateOneof::Ping(_)) => {
-                    // fix 处理发送ping 异常的问题
-                    let p = sub
-                        .send(SubscribeRequest {
-                            ping: Some(SubscribeRequestPing { id: 1 }),
-                            ..Default::default()
-                        })
-                        .await;
-                    match p {
-                        Ok(_) => {}
-                        Err(e) => {
-                            warn!("pong send failed{:?}", e.to_string())
-                        }
-                    }
-                }
-                Some(UpdateOneof::Pong(_)) => {}
-
-                _ => {
-                    continue;
-                }
-            }
-        }
         if restart {
             let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重连!";
             utils::send_message(feishu.clone(), nitify_msg).await?;
@@ -477,6 +419,70 @@ async fn main() -> Result<()> {
             utils::send_message(feishu.clone(), nitify_msg).await?;
             tokio::time::sleep(Duration::from_secs(interval)).await;
             exit(0);
+        }
+    }
+}
+
+
+async fn core(mut client: &mut GeyserGrpcClient<impl Interceptor + Sized>, mg: Client) {
+    // 构建订阅请求
+    let request = create_request();
+    // 消息流
+    let (mut sub, mut stream) = client
+        .subscribe_with_request(Some(request))
+        .await
+        .expect("subscribe_with_request failed");
+    // 死循环接收消息并处理
+    info!("开始处理订阅...");
+    while let Some(message) = stream.next().await {
+        if message.is_err() {
+            error!("message is error -> continue");
+            error!("status: {:?}", message.err());
+            continue;
+        }
+
+        let msg = message.unwrap();
+        match msg.update_oneof {
+            Some(UpdateOneof::Transaction(tx)) => {
+                let transaction: TransactionPretty = tx.into();
+                // info!("new transaction update: filters {:?}", msg.filters);
+                match handle_transaction_update(transaction).await {
+                    Ok(action) => {
+                        // info!("action parse success:\n{:?}", action);
+                        match insert_action_data(&mg, action).await {
+                            Ok(s) => {
+                                // info!("Success: {:?}", s);
+                            }
+                            Err(e) => {
+                                warn!("Error inserting: {:?}", e.to_string());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // warn!("parse fail{:?}", e.to_string())
+                    }
+                }
+            }
+            Some(UpdateOneof::Ping(_)) => {
+                // fix 处理发送ping 异常的问题
+                let p = sub
+                    .send(SubscribeRequest {
+                        ping: Some(SubscribeRequestPing { id: 1 }),
+                        ..Default::default()
+                    })
+                    .await;
+                match p {
+                    Ok(_) => {}
+                    Err(e) => {
+                        warn!("pong send failed{:?}", e.to_string())
+                    }
+                }
+            }
+            Some(UpdateOneof::Pong(_)) => {}
+
+            _ => {
+                continue;
+            }
         }
     }
 }

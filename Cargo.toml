@@ -1,4 +1,6 @@
 [workspace]
+resolver = "2"
+
 members = [
     "sync"
 ]
@@ -20,4 +22,3 @@ chrono = "0.4.38"
 reqwest = { version = "0.12.0", features = ["json"] }
 clap = { version = "4.5.10", features = ["derive"] }
 mongodb = { version = "2.8.2", features = ["tokio-sync"] }
-

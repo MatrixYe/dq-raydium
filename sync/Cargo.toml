@@ -20,4 +20,3 @@ chrono = { workspace = true }
 reqwest = { workspace = true }
 clap = { workspace = true }
 mongodb = { workspace = true }
-
