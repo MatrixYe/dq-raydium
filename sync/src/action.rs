@@ -1,4 +1,4 @@
-use mongodb::bson::{doc, DateTime};
+use mongodb::bson::{DateTime, doc};
 use serde::{Deserialize, Serialize};
 
 pub enum ActionType {
