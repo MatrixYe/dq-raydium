@@ -474,7 +474,7 @@ async fn core(mut client: &mut GeyserGrpcClient<impl Interceptor + Sized>, mg: C
                 match p {
                     Ok(_) => {}
                     Err(e) => {
-                        warn!("pong send failed{:?}", e.to_string())
+                        warn!("pong send failed{:?}", e.to_string());
                     }
                 }
             }
