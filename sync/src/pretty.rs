@@ -16,7 +16,7 @@ use yellowstone_grpc_proto::geyser::{
 ///
 /// @Author Matrix.Ye
 ///
-/// @Description:
+/// @Description: 交易数据的序列化
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct AccountPretty {
@@ -60,7 +60,7 @@ impl From<SubscribeUpdateAccount> for AccountPretty {
 pub struct TransactionPretty {
     pub slot: u64,
     pub signature: Signature,
-    pub is_vote: bool,
+    pub is_vote: bool,//是否获取投票交易
     pub tx: EncodedTransactionWithStatusMeta,
 }
 

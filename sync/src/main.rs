@@ -65,6 +65,7 @@ type TransactionsFilterMap = HashMap<String, SubscribeRequestFilterTransactions>
 // type BlocksMetaFilterMap = HashMap<String, SubscribeRequestFilterBlocksMeta>;
 
 //noinspection ALL,RsMainFunctionNotFound
+// 处理交易信息，核心数据解析
 async fn handle_transaction_update(transaction: TransactionPretty) -> Result<ActionData> {
     let mut action_data = ActionData::default();
 
@@ -245,7 +246,7 @@ async fn handle_transaction_update(transaction: TransactionPretty) -> Result<Act
     Ok(action_data)
 }
 
-// 插入数据
+// 插入数据到mongodb
 async fn insert_action_data(client: &Client, action_data: ActionData) -> Result<String> {
     let db = client.database(MG_DB_NAME_RAYDIUM);
     let sig = &action_data.signature.clone();
@@ -376,7 +377,7 @@ async fn main() -> Result<()> {
     let mg = init_mongo_client(mg_connect_str).await?;
     let interval = args.retry_interval;
     let feishu = args.feishu;
-    let restart = args.restart;
+    let restart = args.restart; //是否重连
 
     // 初始化solana geyser grpc 客户端
     let endpoint = args.grpc_url;
@@ -409,7 +410,7 @@ async fn main() -> Result<()> {
     utils::send_message(feishu.clone(), "dq-raydium: 同步解析服务已启动,Good Luck!").await.expect("can not send feishu");
     loop {
         core(&mut client, mg.clone()).await;
-
+        // 重连机制
         if restart {
             let nitify_msg = "dq_raydium:yellowston-grpc:strem error => 自动重连!";
             utils::send_message(feishu.clone(), nitify_msg).await?;
@@ -423,7 +424,7 @@ async fn main() -> Result<()> {
     }
 }
 
-
+// 核心方法，接收grpc消息并处理
 async fn core(mut client: &mut GeyserGrpcClient<impl Interceptor + Sized>, mg: Client) {
     // 构建订阅请求
     let request = create_request();
@@ -443,6 +444,7 @@ async fn core(mut client: &mut GeyserGrpcClient<impl Interceptor + Sized>, mg: C
 
         let msg = message.unwrap();
         match msg.update_oneof {
+            // 交易信息
             Some(UpdateOneof::Transaction(tx)) => {
                 let transaction: TransactionPretty = tx.into();
                 // info!("new transaction update: filters {:?}", msg.filters);
@@ -463,6 +465,7 @@ async fn core(mut client: &mut GeyserGrpcClient<impl Interceptor + Sized>, mg: C
                     }
                 }
             }
+            // Ping/Pong消息
             Some(UpdateOneof::Ping(_)) => {
                 // fix 处理发送ping 异常的问题
                 let p = sub
@@ -478,6 +481,7 @@ async fn core(mut client: &mut GeyserGrpcClient<impl Interceptor + Sized>, mg: C
                     }
                 }
             }
+            // Pong 消息，不处理，无关
             Some(UpdateOneof::Pong(_)) => {}
 
             _ => {

@@ -1,6 +1,7 @@
 use mongodb::bson::{DateTime, doc};
 use serde::{Deserialize, Serialize};
 
+/// 交易行为
 pub enum ActionType {
     // 创建新交易对
     #[allow(unused_variables)]
@@ -97,6 +98,7 @@ impl NewPairData {
     }
 }
 
+/// 数据库字段 非关系型
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ActionData {
     // 时间序列字段
@@ -127,7 +129,7 @@ pub struct ActionData {
     pub fee: u64,
 }
 
-// 元数据字段
+///元数据字段，mongo时间序列无索引的补充字段
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Metadata {
     // 签名者
@@ -158,7 +160,7 @@ impl ActionData {
         };
         data
     }
-    // 检查
+    // 检查是否合法
     pub fn check(&self) -> bool {
         !self.token_b.is_empty()
             && !self.token_a.is_empty()

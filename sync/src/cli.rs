@@ -27,10 +27,10 @@ pub struct Args {
     #[arg(long, default_value_t = 15)]
     pub retry_interval: u64,
 
-    // /// 飞书消息推送url
+    /// 飞书消息推送url
     #[arg(long)]
     pub feishu: Option<String>,
-
+    /// 订阅消息错误是否自动重连
     #[arg(long)]
     pub restart: bool,
 }

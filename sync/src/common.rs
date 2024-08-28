@@ -10,13 +10,14 @@ use solana_sdk::pubkey::Pubkey;
 ///
 /// @Description:
 
+/// 相关的固定字段
 pub enum ProgramID {
     #[allow(unused_variables)]
-    RaydiumLiquidityPoolV4,
+    RaydiumLiquidityPoolV4, // Raydium V4 核心合约地址
     #[allow(unused_variables)]
     RaydiumAuthorityV4,
     #[allow(unused_variables)]
-    JupiterAggregatorV6,
+    JupiterAggregatorV6, // Jupiter的地址
 }
 
 impl ProgramID {
@@ -36,6 +37,7 @@ impl ProgramID {
     }
 }
 
+/// 相关Token的mint地址
 #[allow(unused_variables)]
 pub enum TokenID {
     WSOL,
