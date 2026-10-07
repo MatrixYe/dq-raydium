@@ -22,17 +22,17 @@ cargo run --bin sync --release -- --mg-url "你的mongodb数据库URL" \
 1. 常规模式
 ```shell
 cargo run --bin sync --release -- --mg-url "mongodb://root:nopassword@127.0.0.1:5011/" \
---grpc-url "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053" \
---grpc-x-token "34df4c72-5d54-49ba-ae2c-2aa1d50679ce" \
+--grpc-url "你的间歇泉api" \
+--grpc-x-token "你的间歇泉api key" \
 --retry-interval 5 \
---feishu "https://open.feishu.cn/open-apis/bot/v2/hook/1e517e58-39dc-4b53-bb44-9b8914e09e8c" \
+--feishu "feishu bot url" \
 --restart
 ```
 2. 安静模式
 ```shell
 cargo run --bin sync --release -- --mg-url "mongodb://root:nopassword@127.0.0.1:5011/" \
---grpc-url "https://redoubled-skippet-wbhxrrgkog-dedicated-lb.helius-rpc.com:2053" \
---grpc-x-token "34df4c72-5d54-49ba-ae2c-2aa1d50679ce" \
+--grpc-url "你的间歇泉api" \
+--grpc-x-token "你的间歇泉api key" \
 --retry-interval 5
 ```
 
