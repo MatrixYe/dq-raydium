@@ -5,7 +5,7 @@ from solana.rpc.api import Client, Signature
 
 def get_transaction_details(sig):
     # Solana RPC endpoint
-    url = "https://redoubled-skippet-wbhxrrgkog-dedicated.helius-rpc.com?api-key=98c56f1d-1661-4d3c-a847-4ac73a7e4841"
+    url = "todo"
     client = Client(url)
     signature = Signature.from_string(sig)
     # Fetch the transaction details
